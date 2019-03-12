@@ -130,6 +130,14 @@
 - (void) saveQuantitySample:(CDVInvokedUrlCommand*)command;
 
 /**
+ * Save category data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+- (void) saveCategory:(CDVInvokedUrlCommand*)command;
+
+
+/**
  * Save correlation data
  *
  * @param command *CDVInvokedUrlCommand

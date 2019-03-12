@@ -258,6 +258,39 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 }
 
 /**
+ * Parse out a category sample from a dictionary and perform error checking
+ *
+ * @param inputDictionary   *NSDictionary
+ * @param error             **NSError
+ * @return                  *HKQuantitySample
+ */
+- (HKCategorySample *)loadCategoryDataFromInputDictionary:(NSDictionary *)inputDictionary error:(NSError **)error {
+    //Load quantity sample from args to command
+    
+    if (![inputDictionary hasAllRequiredKeys:@[HKPluginKeyStartDate, HKPluginKeyEndDate, HKPluginKeySampleType, HKPluginKeyUnit, HKPluginKeyAmount] error:error]) {
+        return nil;
+    }
+    
+    NSDate *startDate = [NSDate dateWithTimeIntervalSince1970:[inputDictionary[HKPluginKeyStartDate] longValue]];
+    NSDate *endDate = [NSDate dateWithTimeIntervalSince1970:[inputDictionary[HKPluginKeyEndDate] longValue]];
+    NSString *sampleTypeString = inputDictionary[HKPluginKeySampleType];
+    NSString *unitString = inputDictionary[HKPluginKeyUnit];
+    
+    //Load optional metadata key
+    NSDictionary *metadata = inputDictionary[HKPluginKeyMetadata];
+    if (metadata == nil) {
+        metadata = @{};
+    }
+    return [HealthKit getHKCategorySampleWithStartDate:startDate
+                                               endDate:endDate
+                                      sampleTypeString:sampleTypeString
+                                        unitTypeString:unitString
+                                                 value:[inputDictionary[HKPluginKeyAmount] doubleValue]
+                                              metadata:metadata error:error];
+    
+}
+
+/**
  * Parse out a quantity sample from a dictionary and perform error checking
  *
  * @param inputDictionary   *NSDictionary
@@ -387,6 +420,41 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 
     return [HKQuantitySample quantitySampleWithType:type quantity:quantity startDate:startDate endDate:endDate metadata:metadata];
 }
+
+/**
+ * Query HealthKit to get a category sample in a specified date range
+ *
+ * @param startDate         *NSDate
+ * @param endDate           *NSDate
+ * @param sampleTypeString  *NSString
+ * @param unitTypeString    *NSString
+ * @param value             double
+ * @param metadata          *NSDictionary
+ * @param error             **NSError
+ * @return                  *HKQuantitySample
+ */
++ (HKCategorySample *)getHKCategorySampleWithStartDate:(NSDate *)startDate
+                                               endDate:(NSDate *)endDate
+                                      sampleTypeString:(NSString *)sampleTypeString
+                                        unitTypeString:(NSString *)unitTypeString
+                                                 value:(double)value
+                                              metadata:(NSDictionary *)metadata
+                                                 error:(NSError **)error {
+    
+        HKCategoryType *type = [HKObjectType categoryTypeForIdentifier:sampleTypeString];
+    
+        if (type == nil) {
+                if (error != nil) {
+                    *error = [NSError errorWithDomain:HKPluginError code:0 userInfo:@{NSLocalizedDescriptionKey: @"quantity type string was invalid"}];
+                }
+                
+                return nil;
+            }
+        return [HKCategorySample categorySampleWithType:type value: value startDate:startDate endDate:endDate];
+}
+
+
+
 
 /**
  * Query HealthKit to get correlation data within a specified date range
@@ -1665,6 +1733,36 @@ static NSString *const HKPluginKeyUUID = @"UUID";
     [[HealthKit sharedHealthStore] executeQuery:query];
 }
 
+/**
+ * Save category data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+-(void) saveCategory:(CDVInvokedUrlCommand *)command{
+    NSDictionary *args = command.arguments[0];
+    NSError *error = nil;
+    HKCategorySample *sample = [self loadCategoryDataFromInputDictionary:args error:&error];
+    //If error in creation, return plugin result
+    if (error) {
+        [HealthKit triggerErrorCallbackWithMessage:error.localizedDescription command:command delegate:self.commandDelegate];
+        return;
+    }
+    
+    //Otherwise save to health store
+    [[HealthKit sharedHealthStore] saveObject:sample withCompletion:^(BOOL success, NSError *innerError) {
+        __block HealthKit *bSelf = self;
+        if (success) {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+            });
+        } else {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [HealthKit triggerErrorCallbackWithMessage:innerError.localizedDescription command:command delegate:bSelf.commandDelegate];
+            });
+        }
+    }];
+}
 /**
  * Save quantity sample data
  *
