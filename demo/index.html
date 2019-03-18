@@ -415,7 +415,7 @@
         'endDate': new Date(), // now
         'sampleType': 'HKCategoryTypeIdentifierSleepAnalysis', // make sure you request write access beforehand
         'unit': '',
-        'amount': parseInt(this.sleep), // 0 for In Bed, 1 for Asleep, 2 for awake
+        'amount': 1, // 0 for In Bed, 1 for Asleep, 2 for awake
       },
       function (value) {
         alert("Success running addSleep, result: " + value);
