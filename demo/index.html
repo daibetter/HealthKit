@@ -81,6 +81,8 @@
     <br/><br/>
     <button onclick="queryCorrelationTypeBloodPressure()">Query correlation blood pressure</button>
     <br/><br/>
+    <button onclick="addSleep()">Save sleep data</button>
+    <br/><br/>
   </div>
 </div>
 <script type="text/javascript" src="cordova.js"></script>
@@ -406,6 +408,23 @@
     );
   }
 
+  function addSleep() {
+    window.plugins.healthkit.saveCategory(
+      {
+        'startDate': new Date(new Date().getTime() - 60 * 60 * 1000), // an hour ago
+        'endDate': new Date(), // now
+        'sampleType': 'HKCategoryTypeIdentifierSleepAnalysis', // make sure you request write access beforehand
+        'unit': '',
+        'amount': parseInt(this.sleep), // 0 for In Bed, 1 for Asleep, 2 for awake
+      },
+      function (value) {
+        alert("Success running addSleep, result: " + value);
+      },
+      function (error) {
+        alert("error running addSleep, result: " + error);
+      }
+    );
+  }
 </script>
 </body>
 </html>
