@@ -594,7 +594,11 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 
         if ([elem isEqual:@"HKWorkoutTypeIdentifier"]) {
             type = [HKObjectType workoutType];
-        } else {
+        }
+        else if ([elem isEqual: @"HKActivitySummaryQuery"]){
+            type = [HKObjectType activitySummaryType];
+        }
+        else {
             type = [HealthKit getHKObjectType:elem];
         }
 
@@ -1515,11 +1519,11 @@ static NSString *const HKPluginKeyUUID = @"UUID";
         NSLog(@"The data is %@",activitySummaries);
         for(HKActivitySummary *summary in activitySummaries){
             HKQuantity *energyBurnt = [summary activeEnergyBurned];
-            HKQuantity *excerciseTime = [summary appleExerciseTime];
+            HKQuantity *exerciseTime = [summary appleExerciseTime];
             HKQuantity *standHours = [summary appleStandHours];
             
             entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);
-            entry[@"excerciseTime"] = @([excerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);
+            entry[@"excerciseTime"] = @([exerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);
             entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);
         }
         
