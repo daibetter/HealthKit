@@ -1483,6 +1483,59 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 }
 
 /**
+ * query Activity summary data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+
+-(void) queryActivitySummary:(CDVInvokedUrlCommand *)command{
+    
+    NSCalendar *calendar = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierIndian];
+    NSDate *endDate = [NSDate date];
+    NSDate *startDate = [NSDate date];
+    NSCalendarUnit unit = NSCalendarUnitDay | NSCalendarUnitMonth | NSCalendarUnitYear | NSCalendarUnitEra;
+    
+    NSDateComponents *startDateComponents = [calendar components:unit fromDate:startDate];
+    startDateComponents.calendar = calendar;
+    
+    NSDateComponents *endDateComponents = [calendar components:unit fromDate:endDate];
+    endDateComponents.calendar = calendar;
+    
+    // Create the predicate for the query
+    NSPredicate *summariesWithinRange =
+    [HKQuery predicateForActivitySummariesBetweenStartDateComponents:startDateComponents endDateComponents:endDateComponents];
+    // Build the query
+    HKActivitySummaryQuery *query = [[HKActivitySummaryQuery alloc] initWithPredicate:summariesWithinRange resultsHandler:^(HKActivitySummaryQuery * _Nonnull query, NSArray<HKActivitySummary *> * _Nullable activitySummaries, NSError * _Nullable error) {
+        __block HealthKit *bSelf = self;
+        if (activitySummaries == nil) {
+            return;
+        }
+        
+        NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+        NSLog(@"The data is %@",activitySummaries);
+        for(HKActivitySummary *summary in activitySummaries){
+            HKQuantity *energyBurnt = [summary activeEnergyBurned];
+            HKQuantity *excerciseTime = [summary appleExerciseTime];
+            HKQuantity *standHours = [summary appleStandHours];
+            
+            entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);
+            entry[@"excerciseTime"] = @([excerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);
+            entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);
+        }
+        
+        if(summariesWithinRange){
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:entry];
+                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+            });
+        }
+        
+    }];
+    
+    [[HealthKit sharedHealthStore]  executeQuery:query];
+}
+
+/**
  * Query a specified sample type using an aggregation
  *
  * @param command *CDVInvokedUrlCommand
