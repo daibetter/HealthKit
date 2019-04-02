@@ -191,7 +191,13 @@ static NSString *const HKPluginKeyUUID = @"UUID";
         return type;
       }
     }
-
+    if ([elem isEqualToString:@"activity"]) {
+        type = [HKObjectType activitySummaryType];
+        if (type != nil) {
+            return type;
+        }
+    }
+    
     // @TODO | The fall through here is inefficient.
     // @TODO | It needs to be refactored so the same HK method isnt called twice
     return [HealthKit getHKSampleType:elem];
@@ -596,7 +602,7 @@ static NSString *const HKPluginKeyUUID = @"UUID";
             type = [HKObjectType workoutType];
         }
         else if ([elem isEqual: @"HKActivitySummaryQuery"]){
-            type = [HKObjectType activitySummaryType];
+             type = [HKObjectType activitySummaryType];
         }
         else {
             type = [HealthKit getHKObjectType:elem];
@@ -664,6 +670,7 @@ static NSString *const HKPluginKeyUUID = @"UUID";
     // if a user grants/denies read access, *only* write access.
     NSMutableDictionary *args = command.arguments[0];
     NSString *checkType = args[HKPluginKeyType];
+
     HKObjectType *type = [HealthKit getHKObjectType:checkType];
 
     __block HealthKit *bSelf = self;
@@ -1487,59 +1494,6 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 }
 
 /**
- * query Activity summary data
- *
- * @param command *CDVInvokedUrlCommand
- */
-
--(void) queryActivitySummary:(CDVInvokedUrlCommand *)command{
-    
-    NSCalendar *calendar = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierIndian];
-    NSDate *endDate = [NSDate date];
-    NSDate *startDate = [NSDate date];
-    NSCalendarUnit unit = NSCalendarUnitDay | NSCalendarUnitMonth | NSCalendarUnitYear | NSCalendarUnitEra;
-    
-    NSDateComponents *startDateComponents = [calendar components:unit fromDate:startDate];
-    startDateComponents.calendar = calendar;
-    
-    NSDateComponents *endDateComponents = [calendar components:unit fromDate:endDate];
-    endDateComponents.calendar = calendar;
-    
-    // Create the predicate for the query
-    NSPredicate *summariesWithinRange =
-    [HKQuery predicateForActivitySummariesBetweenStartDateComponents:startDateComponents endDateComponents:endDateComponents];
-    // Build the query
-    HKActivitySummaryQuery *query = [[HKActivitySummaryQuery alloc] initWithPredicate:summariesWithinRange resultsHandler:^(HKActivitySummaryQuery * _Nonnull query, NSArray<HKActivitySummary *> * _Nullable activitySummaries, NSError * _Nullable error) {
-        __block HealthKit *bSelf = self;
-        if (activitySummaries == nil) {
-            return;
-        }
-        
-        NSMutableDictionary *entry = [NSMutableDictionary dictionary];
-        NSLog(@"The data is %@",activitySummaries);
-        for(HKActivitySummary *summary in activitySummaries){
-            HKQuantity *energyBurnt = [summary activeEnergyBurned];
-            HKQuantity *exerciseTime = [summary appleExerciseTime];
-            HKQuantity *standHours = [summary appleStandHours];
-            
-            entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);
-            entry[@"excerciseTime"] = @([exerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);
-            entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);
-        }
-        
-        if(summariesWithinRange){
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:entry];
-                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
-            });
-        }
-        
-    }];
-    
-    [[HealthKit sharedHealthStore]  executeQuery:query];
-}
-
-/**
  * Query a specified sample type using an aggregation
  *
  * @param command *CDVInvokedUrlCommand
@@ -1788,6 +1742,80 @@ static NSString *const HKPluginKeyUUID = @"UUID";
         }
     }];
     [[HealthKit sharedHealthStore] executeQuery:query];
+}
+
+
+-(void) queryActivitySummary:(CDVInvokedUrlCommand *)command{
+    NSDictionary *args = command.arguments[0];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *startDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyStartDate] longValue]];
+    NSDate *endDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyEndDate] longValue]];
+    
+    NSCalendarUnit unit = NSCalendarUnitDay | NSCalendarUnitMonth | NSCalendarUnitYear | NSCalendarUnitEra;
+    
+    NSDateComponents *startDateComponents = [calendar components:unit fromDate:startDate];
+    startDateComponents.calendar = calendar;
+    
+    NSDateComponents *endDateComponents = [calendar components:unit fromDate:endDate];
+    endDateComponents.calendar = calendar;
+    
+    // Create the predicate for the query
+    NSPredicate *summariesWithinRange =
+    [HKQuery predicateForActivitySummariesBetweenStartDateComponents:startDateComponents endDateComponents:endDateComponents ];
+    // Build the query
+    
+    
+    HKActivitySummaryQuery *query = [[HKActivitySummaryQuery alloc] initWithPredicate:summariesWithinRange resultsHandler:^(HKActivitySummaryQuery * _Nonnull query, NSArray<HKActivitySummary *> * _Nullable activitySummaries, NSError * _Nullable error) {
+        __block HealthKit *bSelf = self;
+        if (activitySummaries == nil) {
+            return;
+        }
+        NSMutableArray *finalResults = [[NSMutableArray alloc] initWithCapacity:activitySummaries.count];
+
+ 
+        
+        NSLog(@"The data is %@",activitySummaries);
+      
+        for(HKActivitySummary *summary in activitySummaries){
+           
+            NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+            
+            NSDateComponents *date = [summary dateComponentsForCalendar: calendar];
+            NSDate *summarydate = [calendar dateFromComponents:date];
+            
+            HKQuantity *energyBurnt = [summary activeEnergyBurned];
+            HKQuantity *exerciseTime = [summary appleExerciseTime];
+            HKQuantity *standHours = [summary appleStandHours];
+            
+            HKQuantity *energyBurntGoal = [summary activeEnergyBurnedGoal];
+            HKQuantity *exerciseTimeGoal = [summary appleExerciseTimeGoal];
+            HKQuantity *standHoursGoal = [summary appleStandHoursGoal];
+            
+            entry[@"summaryDate"] = [HealthKit stringFromDate:summarydate];
+            entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);;
+            entry[@"exerciseTime"] = @([exerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);;
+            entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);;
+            
+            entry[@"energyBurntGoal"] = @([energyBurntGoal doubleValueForUnit:[HKUnit kilocalorieUnit]]);;
+            entry[@"excerciseTimeGoal"] = @([exerciseTimeGoal doubleValueForUnit:[HKUnit minuteUnit]]);;
+            entry[@"standHoursGoal"] = @([standHoursGoal doubleValueForUnit:[HKUnit countUnit]]);;
+            
+            
+            [finalResults addObject:entry];
+            
+        }
+        
+        
+        if(summariesWithinRange){
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:finalResults];
+                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+            });
+        }
+        
+    }];
+    
+    [[HealthKit sharedHealthStore]  executeQuery:query];
 }
 
 /**
