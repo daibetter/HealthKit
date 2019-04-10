@@ -1795,7 +1795,7 @@ static NSString *const HKPluginKeyUUID = @"UUID";
             HKQuantity *exerciseTimeGoal = [summary appleExerciseTimeGoal];
             HKQuantity *standHoursGoal = [summary appleStandHoursGoal];
             
-            entry[@"summaryDate"] = [HealthKit stringFromDate:summarydate];
+            entry[@"startDate"] = [HealthKit stringFromDate:summarydate];
             entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);;
             entry[@"exerciseTime"] = @([exerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);;
             entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);;
