@@ -123,6 +123,13 @@
 - (void) queryActivitySummary:(CDVInvokedUrlCommand*)command;
 
 /**
+ * Query a statistics Data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+- (void) queryStatisticsData:(CDVInvokedUrlCommand*)command
+
+/**
  * Query a specified sample type using an aggregation
  *
  * @param command *CDVInvokedUrlCommand
