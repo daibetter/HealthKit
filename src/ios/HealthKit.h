@@ -127,7 +127,7 @@
  *
  * @param command *CDVInvokedUrlCommand
  */
-- (void) queryStatisticsData:(CDVInvokedUrlCommand*)command
+- (void) queryStatisticsData:(CDVInvokedUrlCommand*)command;
 
 /**
  * Query a specified sample type using an aggregation
