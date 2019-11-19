@@ -119,6 +119,10 @@ define('queryCorrelationType', {required: 'correlationType'}, hasValidDates);
 define('saveQuantitySample', {required: 'sampleType'}, hasValidDates);
 define('saveCategory', {required: 'sampleType'}, hasValidDates);
 
+define('queryClinicalSampleType', {required: 'sampleType'}, hasValidDates);
+define('queryForClinicalRecordsFromSource', {required: ['sampleType', 'fhirResourceType', 'identifier', 'source']});
+define('queryForClinicalRecordsWithFHIRResourceType', {required: ['sampleType', 'fhirResourceType']});
+
 define('saveCorrelation', {required: ['correlationType', 'samples']}, function(options) {
   hasValidDates(options);
   options.objects = options.samples.map(hasValidDates);
