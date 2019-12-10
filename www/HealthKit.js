@@ -109,13 +109,15 @@ define('saveWorkout', {required: 'startDate'}, function(options) {
 
 define('monitorSampleType', {required: 'sampleType'});
 define('querySampleType', {required: 'sampleType'}, hasValidDates);
-
+define('queryActivitySummary',hasValidDates);
+define('queryStatisticsData',hasValidDates);
 define('querySampleTypeAggregated', {required: 'sampleType'}, hasValidDates);
 
 define('deleteSamples', {required: 'sampleType'}, hasValidDates);
 
 define('queryCorrelationType', {required: 'correlationType'}, hasValidDates);
 define('saveQuantitySample', {required: 'sampleType'}, hasValidDates);
+define('saveCategory', {required: 'sampleType'}, hasValidDates);
 
 define('queryClinicalSampleType', {required: 'sampleType'}, hasValidDates);
 define('queryForClinicalRecordsFromSource', {required: ['sampleType', 'fhirResourceType', 'identifier', 'source']});

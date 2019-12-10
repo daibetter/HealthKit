@@ -135,6 +135,20 @@ static NSString *const HKPluginKeyUUID = @"UUID";
 - (void) querySampleType:(CDVInvokedUrlCommand*)command;
 
 /**
+ * Query a Activity Summary
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+- (void) queryActivitySummary:(CDVInvokedUrlCommand*)command;
+
+/**
+ * Query a statistics Data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+- (void) queryStatisticsData:(CDVInvokedUrlCommand*)command;
+
+/**
  * Query a specified sample type using an aggregation
  *
  * @param command *CDVInvokedUrlCommand
@@ -168,6 +182,14 @@ static NSString *const HKPluginKeyUUID = @"UUID";
  * @param command *CDVInvokedUrlCommand
  */
 - (void) saveQuantitySample:(CDVInvokedUrlCommand*)command;
+
+/**
+ * Save category data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+- (void) saveCategory:(CDVInvokedUrlCommand*)command;
+
 
 /**
  * Save correlation data

@@ -136,7 +136,13 @@
         return type;
       }
     }
-
+    if ([elem isEqualToString:@"activity"]) {
+        type = [HKObjectType activitySummaryType];
+        if (type != nil) {
+            return type;
+        }
+    }
+    
     // @TODO | The fall through here is inefficient.
     // @TODO | It needs to be refactored so the same HK method isnt called twice
     return [HealthKit getHKSampleType:elem];
@@ -200,6 +206,39 @@
     // leave this here for if/when apple adds other sample types
     return type;
 
+}
+
+/**
+ * Parse out a category sample from a dictionary and perform error checking
+ *
+ * @param inputDictionary   *NSDictionary
+ * @param error             **NSError
+ * @return                  *HKQuantitySample
+ */
+- (HKCategorySample *)loadCategoryDataFromInputDictionary:(NSDictionary *)inputDictionary error:(NSError **)error {
+    //Load quantity sample from args to command
+    
+    if (![inputDictionary hasAllRequiredKeys:@[HKPluginKeyStartDate, HKPluginKeyEndDate, HKPluginKeySampleType, HKPluginKeyUnit, HKPluginKeyAmount] error:error]) {
+        return nil;
+    }
+    
+    NSDate *startDate = [NSDate dateWithTimeIntervalSince1970:[inputDictionary[HKPluginKeyStartDate] longValue]];
+    NSDate *endDate = [NSDate dateWithTimeIntervalSince1970:[inputDictionary[HKPluginKeyEndDate] longValue]];
+    NSString *sampleTypeString = inputDictionary[HKPluginKeySampleType];
+    NSString *unitString = inputDictionary[HKPluginKeyUnit];
+    
+    //Load optional metadata key
+    NSDictionary *metadata = inputDictionary[HKPluginKeyMetadata];
+    if (metadata == nil) {
+        metadata = @{};
+    }
+    return [HealthKit getHKCategorySampleWithStartDate:startDate
+                                               endDate:endDate
+                                      sampleTypeString:sampleTypeString
+                                        unitTypeString:unitString
+                                                 value:[inputDictionary[HKPluginKeyAmount] doubleValue]
+                                              metadata:metadata error:error];
+    
 }
 
 /**
@@ -332,6 +371,41 @@
 
     return [HKQuantitySample quantitySampleWithType:type quantity:quantity startDate:startDate endDate:endDate metadata:metadata];
 }
+
+/**
+ * Query HealthKit to get a category sample in a specified date range
+ *
+ * @param startDate         *NSDate
+ * @param endDate           *NSDate
+ * @param sampleTypeString  *NSString
+ * @param unitTypeString    *NSString
+ * @param value             double
+ * @param metadata          *NSDictionary
+ * @param error             **NSError
+ * @return                  *HKQuantitySample
+ */
++ (HKCategorySample *)getHKCategorySampleWithStartDate:(NSDate *)startDate
+                                               endDate:(NSDate *)endDate
+                                      sampleTypeString:(NSString *)sampleTypeString
+                                        unitTypeString:(NSString *)unitTypeString
+                                                 value:(double)value
+                                              metadata:(NSDictionary *)metadata
+                                                 error:(NSError **)error {
+    
+        HKCategoryType *type = [HKObjectType categoryTypeForIdentifier:sampleTypeString];
+    
+        if (type == nil) {
+                if (error != nil) {
+                    *error = [NSError errorWithDomain:HKPluginError code:0 userInfo:@{NSLocalizedDescriptionKey: @"quantity type string was invalid"}];
+                }
+                
+                return nil;
+            }
+        return [HKCategorySample categorySampleWithType:type value: value startDate:startDate endDate:endDate];
+}
+
+
+
 
 /**
  * Query HealthKit to get correlation data within a specified date range
@@ -471,7 +545,11 @@
 
         if ([elem isEqual:@"HKWorkoutTypeIdentifier"]) {
             type = [HKObjectType workoutType];
-        } else {
+        }
+        else if ([elem isEqual: @"HKActivitySummaryQuery"]){
+             type = [HKObjectType activitySummaryType];
+        }
+        else {
             type = [HealthKit getHKObjectType:elem];
         }
 
@@ -537,8 +615,13 @@
     // if a user grants/denies read access, *only* write access.
     NSMutableDictionary *args = command.arguments[0];
     NSString *checkType = args[HKPluginKeyType];
-    HKObjectType *type = [HealthKit getHKObjectType:checkType];
-
+    HKObjectType *type;
+    if ([checkType isEqual:@"HKActivitySummaryQuery"]) {
+        type =[HKObjectType activitySummaryType];
+    }else{
+        type = [HealthKit getHKObjectType:checkType];
+        
+    }
     __block HealthKit *bSelf = self;
     [self checkAuthStatusWithCallbackId:command.callbackId forType:type andCompletion:^(CDVPluginResult *result, NSString *callbackId) {
         [bSelf.commandDelegate sendPluginResult:result callbackId:callbackId];
@@ -1614,6 +1697,208 @@
     [[HealthKit sharedHealthStore] executeQuery:query];
 }
 
+/**
+ * Query activity summary from Healthkit
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+
+-(void) queryActivitySummary:(CDVInvokedUrlCommand *)command{
+    NSDictionary *args = command.arguments[0];
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *startDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyStartDate] longValue]];
+    NSDate *endDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyEndDate] longValue]];
+    
+    NSCalendarUnit unit = NSCalendarUnitDay | NSCalendarUnitMonth | NSCalendarUnitYear | NSCalendarUnitEra;
+    
+    NSDateComponents *startDateComponents = [calendar components:unit fromDate:startDate];
+    startDateComponents.calendar = calendar;
+    
+    NSDateComponents *endDateComponents = [calendar components:unit fromDate:endDate];
+    endDateComponents.calendar = calendar;
+    
+    // Create the predicate for the query
+    NSPredicate *summariesWithinRange =
+    [HKQuery predicateForActivitySummariesBetweenStartDateComponents:startDateComponents endDateComponents:endDateComponents ];
+    // Build the query
+    
+    
+    HKActivitySummaryQuery *query = [[HKActivitySummaryQuery alloc] initWithPredicate:summariesWithinRange resultsHandler:^(HKActivitySummaryQuery * _Nonnull query, NSArray<HKActivitySummary *> * _Nullable activitySummaries, NSError * _Nullable error) {
+        __block HealthKit *bSelf = self;
+        if (activitySummaries == nil) {
+            return;
+        }
+        NSMutableArray *finalResults = [[NSMutableArray alloc] initWithCapacity:activitySummaries.count];
+
+ 
+        
+        NSLog(@"The data is %@",activitySummaries);
+      
+        for(HKActivitySummary *summary in activitySummaries){
+           
+            NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+            
+            NSDateComponents *date = [summary dateComponentsForCalendar: calendar];
+            NSDate *summarydate = [calendar dateFromComponents:date];
+            
+            HKQuantity *energyBurnt = [summary activeEnergyBurned];
+            HKQuantity *exerciseTime = [summary appleExerciseTime];
+            HKQuantity *standHours = [summary appleStandHours];
+            
+            HKQuantity *energyBurntGoal = [summary activeEnergyBurnedGoal];
+            HKQuantity *exerciseTimeGoal = [summary appleExerciseTimeGoal];
+            HKQuantity *standHoursGoal = [summary appleStandHoursGoal];
+            
+            entry[@"startDate"] = [HealthKit stringFromDate:summarydate];
+            entry[@"energyBurnt"] = @([energyBurnt doubleValueForUnit:[HKUnit kilocalorieUnit]]);;
+            entry[@"exerciseTime"] = @([exerciseTime doubleValueForUnit:[HKUnit minuteUnit]]);;
+            entry[@"standHours"] = @([standHours doubleValueForUnit:[HKUnit countUnit]]);;
+            
+            entry[@"energyBurntGoal"] = @([energyBurntGoal doubleValueForUnit:[HKUnit kilocalorieUnit]]);;
+            entry[@"excerciseTimeGoal"] = @([exerciseTimeGoal doubleValueForUnit:[HKUnit minuteUnit]]);;
+            entry[@"standHoursGoal"] = @([standHoursGoal doubleValueForUnit:[HKUnit countUnit]]);;
+            
+            
+            [finalResults addObject:entry];
+            
+        }
+        
+        
+        if(summariesWithinRange){
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:finalResults];
+                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+            });
+        }
+        
+    }];
+    
+    [[HealthKit sharedHealthStore]  executeQuery:query];
+}
+
+
+/**
+ * Query stats Data from Healthkit
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+
+-(void) queryStatisticsData:(CDVInvokedUrlCommand *)command{
+    NSDictionary *args = command.arguments[0];
+    NSDate *startDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyStartDate] longValue]];
+    NSDate *endDate = [NSDate dateWithTimeIntervalSince1970:[args[HKPluginKeyEndDate] longValue]];
+    NSString *sampleTypeString = args[HKPluginKeySampleType];
+    NSString *unitString = args[HKPluginKeyUnit];
+    
+    HKQuantityType *quantity = [HealthKit getHKQuantityType:sampleTypeString];
+    NSPredicate *predicate = [HKQuery predicateForSamplesWithStartDate:startDate endDate:endDate options:HKQueryOptionNone];
+    NSSet *requestTypes = [NSSet setWithObjects:quantity, nil];
+    
+    [[HealthKit sharedHealthStore] requestAuthorizationToShareTypes:nil readTypes:requestTypes completion:^(BOOL success, NSError *error) {
+           __block HealthKit *bSelf = self;
+        if (success) {
+            Boolean isDiscrete = false;
+            NSUInteger options = HKStatisticsOptionDiscreteAverage;
+            if([sampleTypeString isEqualToString:@"HKQuantityTypeIdentifierBasalEnergyBurned"]){
+                options = HKStatisticsOptionCumulativeSum;
+                isDiscrete = false;
+            }else{
+                options = HKStatisticsOptionDiscreteAverage;
+                isDiscrete = true;
+            }
+            
+            HKUnit *unit = [HKUnit unitFromString:unitString];
+           
+            NSString *errorMessage = nil;
+
+            if(unit == nil){
+                errorMessage = @"unit is wrong";
+            }
+            
+            if (![quantity isCompatibleWithUnit:unit]) {
+                errorMessage = @"unit is not compatible with quantity";
+            }
+            
+          
+            if(errorMessage){
+                dispatch_sync(dispatch_get_main_queue(), ^{
+                    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
+                    [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+                });
+                return;
+            }
+            
+            NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+            HKStatisticsQuery *query = [[HKStatisticsQuery alloc] initWithQuantityType:quantity quantitySamplePredicate:predicate options:options completionHandler:^(HKStatisticsQuery * _Nonnull query, HKStatistics * _Nullable statistics, NSError * _Nullable error) {
+                
+                if (error != nil) {
+                    NSLog(@"The data is %@",error);
+                 }
+              
+                HKQuantity *quantity;
+                
+                if(isDiscrete){
+                    quantity = [statistics averageQuantity];
+                }
+                else{
+                    quantity = [statistics sumQuantity];
+                }
+               
+                if(quantity){
+                    entry[@"startDate"] = [HealthKit stringFromDate:startDate];
+                    entry[@"endDate"] = [HealthKit stringFromDate:startDate];
+                    double value = [quantity doubleValueForUnit: unit];
+                    entry[@"value"] = @(value);
+                  
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:entry];
+                        [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+                    });
+                }else{
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR];
+                        [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+                    });
+                }
+    
+            }];
+             [[HealthKit sharedHealthStore]  executeQuery:query];
+        }
+        
+    }];    
+}
+
+
+/**
+ * Save category data
+ *
+ * @param command *CDVInvokedUrlCommand
+ */
+-(void) saveCategory:(CDVInvokedUrlCommand *)command{
+    NSDictionary *args = command.arguments[0];
+    NSError *error = nil;
+    HKCategorySample *sample = [self loadCategoryDataFromInputDictionary:args error:&error];
+    //If error in creation, return plugin result
+    if (error) {
+        [HealthKit triggerErrorCallbackWithMessage:error.localizedDescription command:command delegate:self.commandDelegate];
+        return;
+    }
+    
+    //Otherwise save to health store
+    [[HealthKit sharedHealthStore] saveObject:sample withCompletion:^(BOOL success, NSError *innerError) {
+        __block HealthKit *bSelf = self;
+        if (success) {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+                [bSelf.commandDelegate sendPluginResult:result callbackId:command.callbackId];
+            });
+        } else {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [HealthKit triggerErrorCallbackWithMessage:innerError.localizedDescription command:command delegate:bSelf.commandDelegate];
+            });
+        }
+    }];
+}
 /**
  * Save quantity sample data
  *
